@@ -1,0 +1,12 @@
+services:
+  - type: worker
+    name: apex-predator-bot
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node src/index.js
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        value: 1539928402209935430
