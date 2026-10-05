@@ -76,8 +76,26 @@ process.on('uncaughtException', (error) => {
     logger.error('Uncaught Exception:', error);
 });
 
+// Lightweight HTTP Health Check Server (Required for Render Web Services & Keepalive)
+const http = require('http');
+const port = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+        status: 'online',
+        bot: client.user ? client.user.tag : 'starting',
+        uptime: process.uptime(),
+        timestamp: new Date().toISOString()
+    }));
+});
+
+server.listen(port, () => {
+    logger.info(`HTTP Health Check server listening on port ${port}`);
+});
+
 // Login to Discord
 client.login(config.token).catch(err => {
     logger.error('Failed to log in to Discord. Please check your BOT TOKEN in .env:', err);
     process.exit(1);
 });
+
