@@ -18,9 +18,10 @@ const client = new Client({
     ]
 });
 
-// Channels in Apex Universe
-const ANNOUNCEMENTS_CHANNEL_ID = '1511460045945176236'; // #📢・universe-announcements
-const GENERAL_INTEL_CHANNEL_ID = '1539942530752454686'; // #💬・general-intel
+// Respective Channels in Apex Universe
+const OFFICIAL_PATCH_NOTES_CHANNEL_ID = '1539947976942944400'; // #📰・official-patch-notes
+const ANNOUNCEMENTS_CHANNEL_ID = '1511460045945176236';        // #📢・universe-announcements
+const GENERAL_INTEL_CHANNEL_ID = '1539942530752454686';        // #💬・general-intel
 
 // Simple function to fetch data from URL
 function fetchUrl(url) {
@@ -87,7 +88,12 @@ client.once('ready', async () => {
                 .setURL('https://discord.gg/YPBtDdykS5')
         );
 
-        const channels = [ANNOUNCEMENTS_CHANNEL_ID, GENERAL_INTEL_CHANNEL_ID];
+        // Dispatch to respective channels in order of relevance
+        const channels = [
+            OFFICIAL_PATCH_NOTES_CHANNEL_ID,
+            ANNOUNCEMENTS_CHANNEL_ID,
+            GENERAL_INTEL_CHANNEL_ID
+        ];
         for (const chId of channels) {
             try {
                 const ch = await client.channels.fetch(chId).catch(() => null);
