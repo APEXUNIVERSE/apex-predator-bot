@@ -77,7 +77,16 @@ db.exec(`
         joined_at INTEGER NOT NULL,
         PRIMARY KEY (guild_id, member_id)
     );
+
+    CREATE TABLE IF NOT EXISTS user_combat_roles (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role_id TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, user_id)
+    );
 `);
+
 
 function getGuildSettings(guildId) {
     const stmt = db.prepare('SELECT * FROM guild_settings WHERE guild_id = ?');
@@ -198,6 +207,21 @@ function getTopInviters(guildId, limit = 10) {
     return stmt.all(guildId, limit);
 }
 
+function setUserCombatRole(guildId, userId, roleId) {
+    const stmt = db.prepare(`
+        INSERT INTO user_combat_roles (guild_id, user_id, role_id, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(guild_id, user_id) DO UPDATE SET role_id = excluded.role_id, updated_at = excluded.updated_at
+    `);
+    return stmt.run(guildId, userId, roleId, Date.now());
+}
+
+function getUserCombatRole(guildId, userId) {
+    const stmt = db.prepare('SELECT role_id FROM user_combat_roles WHERE guild_id = ? AND user_id = ?');
+    const row = stmt.get(guildId, userId);
+    return row ? row.role_id : null;
+}
+
 module.exports = {
     db,
     getGuildSettings,
@@ -213,5 +237,8 @@ module.exports = {
     getReactionRole,
     getInvites,
     incrementInvite,
-    getTopInviters
+    getTopInviters,
+    setUserCombatRole,
+    getUserCombatRole
 };
+

@@ -11,16 +11,15 @@ const {
 } = require('discord.js');
 const logger = require('../utils/logger');
 const embeds = require('../utils/embeds');
-const { getGuildSettings, createTicket, getTicketByChannel, closeTicket, getInvites } = require('../database/db');
+const { getGuildSettings, createTicket, getTicketByChannel, closeTicket, getInvites, setUserCombatRole, getUserCombatRole } = require('../database/db');
+const { COMBAT_ROLES, COMBAT_ROLE_IDS, CHANNELS, VERIFIED_OPERATOR_ROLE_ID, WARZONE_SLAYER_ROLE_ID } = require('../utils/constants');
 const config = require('../config');
 
 // Apex Universe Constant IDs
-const VERIFIED_OPERATOR_ROLE_ID = '1539938913173372980';
-const WARZONE_SLAYER_ROLE_ID = '1539938915518255135';
-const GAMER_TAGS_CHANNEL_ID = '1539942545944084561';
-const OPERATOR_WELCOME_CHANNEL_ID = '1539942509550247956';
-const GENERAL_INTEL_CHANNEL_ID = '1539942530752454686';
-const VERIFY_CHANNEL_ID = '1539942524578304052';
+const GAMER_TAGS_CHANNEL_ID = CHANNELS.GAMER_TAGS;
+const OPERATOR_WELCOME_CHANNEL_ID = CHANNELS.OPERATOR_WELCOME;
+const GENERAL_INTEL_CHANNEL_ID = CHANNELS.GENERAL_INTEL;
+const VERIFY_CHANNEL_ID = CHANNELS.VERIFY;
 
 module.exports = {
     name: 'interactionCreate',
@@ -381,7 +380,73 @@ module.exports = {
                 return;
             }
 
-            // --- F. Handle Reaction Roles Toggle ---
+            // --- F. Handle Squad Combat Roles (claim_role_*) ---
+            if (customId.startsWith('claim_role_') || (customId.startsWith('role_toggle_') && COMBAT_ROLE_IDS.includes(customId.replace('role_toggle_', '')))) {
+                let targetRoleId = null;
+                let roleName = 'Combat Specialization';
+
+                if (customId.startsWith('claim_role_')) {
+                    const entry = COMBAT_ROLES[customId];
+                    if (entry) {
+                        targetRoleId = entry.id;
+                        roleName = entry.name;
+                    }
+                } else {
+                    targetRoleId = customId.replace('role_toggle_', '');
+                    const foundEntry = Object.values(COMBAT_ROLES).find(e => e.id === targetRoleId);
+                    if (foundEntry) roleName = foundEntry.name;
+                }
+
+                if (!targetRoleId) {
+                    return interaction.reply({
+                        embeds: [embeds.error('Error', 'Combat role specialization not recognized.')],
+                        ephemeral: true
+                    });
+                }
+
+                // Persist the user's selected combat specialization in SQLite
+                setUserCombatRole(guild.id, user.id, targetRoleId);
+
+                const currentVcId = member.voice?.channelId;
+                const isInActiveVC = Boolean(currentVcId && currentVcId !== CHANNELS.AFK_VOICE);
+
+                if (isInActiveVC) {
+                    // In active voice channel: equip immediately, remove other combat roles
+                    const otherRoles = COMBAT_ROLE_IDS.filter(id => id !== targetRoleId && member.roles.cache.has(id));
+                    if (otherRoles.length > 0) {
+                        await member.roles.remove(otherRoles).catch(() => null);
+                    }
+                    if (!member.roles.cache.has(targetRoleId)) {
+                        await member.roles.add(targetRoleId).catch(() => null);
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setColor(0x57F287)
+                        .setTitle('⚔️ Combat Specialization Equipped!')
+                        .setDescription(`Your role is set to **${roleName}**.\n\n🎙️ **Voice Channel:** Active in <#${currentVcId}>\n⏳ **Temporary Role:** This role will be automatically removed when you leave the voice channel.`)
+                        .setFooter({ text: 'Temporary game-based role • No DMs' })
+                        .setTimestamp();
+
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
+                } else {
+                    // Not in active voice channel: strip combat roles if held, notify role is saved for VC join
+                    const existingCombatRoles = COMBAT_ROLE_IDS.filter(id => member.roles.cache.has(id));
+                    if (existingCombatRoles.length > 0) {
+                        await member.roles.remove(existingCombatRoles).catch(() => null);
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setColor(0x5865F2)
+                        .setTitle('🎯 Combat Specialization Saved!')
+                        .setDescription(`Your role is set to **${roleName}**.\n\n🎙️ **Automatic Voice Activation:**\nThis role is temporary and game-based. It will **automatically activate** whenever you join a squad voice channel, and will **automatically deactivate** when you leave or disconnect.\n\n*Zero personal DMs will be sent.*`)
+                        .setFooter({ text: 'Temporary game-based role • No DMs' })
+                        .setTimestamp();
+
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
+                }
+            }
+
+            // --- G. Handle General Reaction Roles Toggle ---
             if (customId.startsWith('role_toggle_')) {
                 const roleId = customId.replace('role_toggle_', '');
                 const role = await guild.roles.fetch(roleId).catch(() => null);
